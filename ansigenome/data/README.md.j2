@@ -41,7 +41,9 @@ This role requires at least Ansible{% if galaxy_info.min_ansible_version is defi
 ### Role dependencies
 
 {% for dependency in dependencies | unique_dict("role") %}
-- `{{ dependency.role | trim }}`{% endfor %}
+{# Assume that scm.host and scm.repo_prefix are the same for this role and all it’s dependencies #}
+- [`{{ dependency.role | trim }}`]({{ scm.host }}/{{ dependency.role | replace('.', '/' + scm.repo_prefix) }})
+{% endfor %}
 {% endblock %}
 {% endif %}
 
