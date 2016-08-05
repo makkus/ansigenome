@@ -108,6 +108,11 @@ class Scan(object):
             self.paths["role"] = os.path.join(self.roles_path, key)
             self.paths["meta"] = os.path.join(self.paths["role"], "meta",
                                               "main.yml")
+            self.paths["ansigenome"] = os.path.join(
+                self.paths["role"],
+                "meta",
+                "ansigenome.yml"
+            )
             self.paths["readme"] = os.path.join(self.paths["role"],
                                                 "README.{0}"
                                                 .format(self.readme_format))
@@ -119,14 +124,14 @@ class Scan(object):
             # we are writing a readme file which means the state of the role
             # needs to be updated before it gets output by the ui
             if self.gendoc:
-                if self.valid_meta(key):
+                if self.read_and_valid_meta(key):
                     self.make_meta_dict_consistent()
                     self.set_readme_template_vars(key, value)
                     self.write_readme(key)
             # only load the meta file when generating meta files
             elif self.genmeta:
                 self.make_or_augment_meta(key)
-                if self.valid_meta(key):
+                if self.read_and_valid_meta(key):
                     self.make_meta_dict_consistent()
                     self.write_meta(key)
             else:
@@ -336,12 +341,15 @@ class Scan(object):
         totals["files"] = sum(roles[item]["total_files"] for item in roles)
         totals["lines"] = sum(roles[item]["total_lines"] for item in roles)
 
-    def valid_meta(self, role):
+    def read_and_valid_meta(self, role):
         """
-        Return whether or not the meta file being read is valid.
+        Read the meta files and return whether or not the meta file being read
+        is valid.
         """
         if os.path.exists(self.paths["meta"]):
             self.meta_dict = utils.yaml_load(self.paths["meta"])
+            if os.path.exists(self.paths["ansigenome"]):
+                self.meta_dict['ansigenome_info'] = utils.yaml_load(self.paths["ansigenome"])['ansigenome_info']
         else:
             self.report["state"]["missing_meta_role"] += 1
             self.report["roles"][role]["state"] = "missing_meta"
