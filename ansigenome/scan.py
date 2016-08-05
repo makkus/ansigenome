@@ -85,6 +85,36 @@ class Scan(object):
         if self.export:
             self.export_roles()
 
+    def _get_maintainers_from_line(self, line):
+        # Modeled with the natural language processing from AIML in mind.
+        # TODO: Remove redundancy. Duplicated into ansigenome source code. Origin: debops-api
+        _re = re.match(
+            r'^[^.]*?maintainers?[\W_]+(:?is|are)[\W_]+`?(?P<nicks>.+?)\.?$',
+            line,
+            re.IGNORECASE
+        )
+        if _re:
+            return [x.rstrip('_') for x in re.split(r'[\s,]+', _re.group('nicks')) if x not in ['and', ',']]
+        else:
+            return None
+
+    def _get_maintainers_from_changelog(self, changes_file):
+        # TODO: Remove redundancy. Duplicated into ansigenome source code. Origin: debops-api
+        """
+        Extract the maintainer from CHANGES.rst file and return the nickname of
+        the maintainer.
+        """
+
+        try:
+            with open(changes_file, 'r') as changes_fh:
+                for line in changes_fh:
+                    nick = self._get_maintainers_from_line(line)
+                    if nick is not None:
+                        return nick
+        except FileNotFoundError:
+            return None
+        return None
+
     def limit_roles(self):
         """
         Limit the roles being scanned.
@@ -113,6 +143,10 @@ class Scan(object):
                 "meta",
                 "ansigenome.yml"
             )
+            self.paths["changelog"] = os.path.join(
+                self.paths["role"],
+                "CHANGES.rst"
+            )
             self.paths["readme"] = os.path.join(self.paths["role"],
                                                 "README.{0}"
                                                 .format(self.readme_format))
@@ -124,14 +158,14 @@ class Scan(object):
             # we are writing a readme file which means the state of the role
             # needs to be updated before it gets output by the ui
             if self.gendoc:
-                if self.read_and_valid_meta(key):
+                if self.read_and_validate_meta(key):
                     self.make_meta_dict_consistent()
                     self.set_readme_template_vars(key, value)
                     self.write_readme(key)
             # only load the meta file when generating meta files
             elif self.genmeta:
                 self.make_or_augment_meta(key)
-                if self.read_and_valid_meta(key):
+                if self.read_and_validate_meta(key):
                     self.make_meta_dict_consistent()
                     self.write_meta(key)
             else:
@@ -341,7 +375,7 @@ class Scan(object):
         totals["files"] = sum(roles[item]["total_files"] for item in roles)
         totals["lines"] = sum(roles[item]["total_lines"] for item in roles)
 
-    def read_and_valid_meta(self, role):
+    def read_and_validate_meta(self, role):
         """
         Read the meta files and return whether or not the meta file being read
         is valid.
@@ -350,6 +384,18 @@ class Scan(object):
             self.meta_dict = utils.yaml_load(self.paths["meta"])
             if os.path.exists(self.paths["ansigenome"]):
                 self.meta_dict['ansigenome_info'] = utils.yaml_load(self.paths["ansigenome"])['ansigenome_info']
+            maintainers = self._get_maintainers_from_changelog(self.paths["changelog"])
+            if 'ansigenome_info' in self.meta_dict and maintainers:
+                authors = []
+                for ind, author in enumerate(self.meta_dict['ansigenome_info']['authors']):
+                    author = self.meta_dict['ansigenome_info']['authors'][ind]
+                    author['maintainer'] = author['github'] in maintainers
+                    authors.append(author)
+                authors_sorted = []
+                authors_sorted.append(authors.pop(0))
+                authors_sorted += sorted(authors, key=lambda k: k['maintainer'], reverse=True)
+                self.meta_dict['ansigenome_info']['authors'] = authors_sorted
+
         else:
             self.report["state"]["missing_meta_role"] += 1
             self.report["roles"][role]["state"] = "missing_meta"
