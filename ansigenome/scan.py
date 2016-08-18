@@ -111,7 +111,7 @@ class Scan(object):
                     nick = self._get_maintainers_from_line(line)
                     if nick is not None:
                         return nick
-        except FileNotFoundError:
+        except:
             return None
         return None
 
