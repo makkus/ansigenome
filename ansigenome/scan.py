@@ -115,6 +115,28 @@ class Scan(object):
             return None
         return None
 
+    def _get_debops_keyring_entities(self, keyids_file):
+        """
+        Return list of nicks defined in the https://github.com/debops/debops-keyring/blob/master/keyids
+        file.
+        The file is assumed to be locally available to avoid to contact external servers.
+        """
+
+        #  FIXME
+        keyids_file = '/home/user/.ansible/ypid-ansible-common/submodules/debops-keyring/keyids'
+
+        entities = set()
+
+        with open(keyids_file, 'r') as keyids_fd:
+            for keyid_line in keyids_fd:
+                _re = re.search(
+                    r'^(?P<keyid>[^ ]+) (?P<name>[^<]+) <(?P<nick>.*)>$',
+                    keyid_line,
+                )
+                entities.add(_re.group('nick'))
+
+        return entities
+
     def limit_roles(self):
         """
         Limit the roles being scanned.
@@ -385,16 +407,22 @@ class Scan(object):
             if os.path.exists(self.paths["ansigenome"]):
                 self.meta_dict['ansigenome_info'] = utils.yaml_load(self.paths["ansigenome"])['ansigenome_info']
             maintainers = self._get_maintainers_from_changelog(self.paths["changelog"])
-            if 'ansigenome_info' in self.meta_dict and maintainers:
-                authors = []
-                for ind, author in enumerate(self.meta_dict['ansigenome_info']['authors']):
-                    author = self.meta_dict['ansigenome_info']['authors'][ind]
-                    author['maintainer'] = author['github'] in maintainers
-                    authors.append(author)
-                authors_sorted = []
-                authors_sorted.append(authors.pop(0))
-                authors_sorted += sorted(authors, key=lambda k: k['maintainer'], reverse=True)
-                self.meta_dict['ansigenome_info']['authors'] = authors_sorted
+            keyring_entities = self._get_debops_keyring_entities(self.config["keyids_file"])
+            if 'ansigenome_info' in self.meta_dict:
+                if maintainers:
+                    authors = []
+                    for ind, author in enumerate(self.meta_dict['ansigenome_info']['authors']):
+                        author = self.meta_dict['ansigenome_info']['authors'][ind]
+                        author['maintainer'] = author['github'] in maintainers
+                        if author['github'] in keyring_entities and 'url' not in author:
+                            author['url'] = 'https://docs.debops.org/en/latest/debops-keyring/docs/entities.html#debops-keyring-entity-{nick}'.format(
+                                nick=author['github'],
+                            )
+                        authors.append(author)
+                    authors_sorted = []
+                    authors_sorted.append(authors.pop(0))
+                    authors_sorted += sorted(authors, key=lambda k: k['maintainer'], reverse=True)
+                    self.meta_dict['ansigenome_info']['authors'] = authors_sorted
 
         else:
             self.report["state"]["missing_meta_role"] += 1
