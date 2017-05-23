@@ -122,18 +122,16 @@ class Scan(object):
         The file is assumed to be locally available to avoid to contact external servers.
         """
 
-        #  FIXME
-        keyids_file = '/home/user/.ansible/ypid-ansible-common/submodules/debops-keyring/keyids'
-
         entities = set()
 
-        with open(keyids_file, 'r') as keyids_fd:
-            for keyid_line in keyids_fd:
-                _re = re.search(
-                    r'^(?P<keyid>[^ ]+) (?P<name>[^<]+) <(?P<nick>.*)>$',
-                    keyid_line,
-                )
-                entities.add(_re.group('nick'))
+        if keyids_file:
+            with open(keyids_file, 'r') as keyids_fd:
+                for keyid_line in keyids_fd:
+                    _re = re.search(
+                        r'^(?P<keyid>[^ ]+) (?P<name>[^<]+) <(?P<nick>.*)>$',
+                        keyid_line,
+                    )
+                    entities.add(_re.group('nick'))
 
         return entities
 
@@ -407,7 +405,7 @@ class Scan(object):
             if os.path.exists(self.paths["ansigenome"]):
                 self.meta_dict['ansigenome_info'] = utils.yaml_load(self.paths["ansigenome"])['ansigenome_info']
             maintainers = self._get_maintainers_from_changelog(self.paths["changelog"])
-            keyring_entities = self._get_debops_keyring_entities(self.config["keyids_file"])
+            keyring_entities = self._get_debops_keyring_entities(self.config.get('keyids_file'))
             if 'ansigenome_info' in self.meta_dict:
                 if maintainers:
                     authors = []
