@@ -73,8 +73,8 @@ def build_option_parser(action):
         parser.set_usage("{0} ROLES_PATH [-f FORMAT]".format(usage_prefix))
         parser.add_option("-f", "--format",
                           dest="format",
-                          default="rst",
-                          help="output formats: rst | md")
+                          default="md",
+                          help="output formats: md | rst")
     elif action == "genmeta":
         parser.set_usage("{0} ROLES_PATH".format(usage_prefix))
     elif action == "export":
