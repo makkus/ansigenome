@@ -1,3 +1,4 @@
+import copy
 import re
 import os
 import sys
@@ -446,6 +447,9 @@ class Scan(object):
             self.report["state"]["ok_role"] += 1
             self.report["roles"][role]["state"] = "ok"
 
+        if not os.path.exists(self.paths["ansigenome"]):
+            open(self.paths["ansigenome"], 'a').close()
+
         # swap values in place to use the config values
         swaps = [
             ("author", self.config["author_name"]),
@@ -454,57 +458,71 @@ class Scan(object):
         ]
 
         (new_meta, _) = utils.swap_yaml_string(self.paths["meta"], swaps)
+        (new_ansigenome, _) = utils.swap_yaml_string(self.paths["ansigenome"], swaps)
 
         # normalize the --- at the top of the file by removing it first
         new_meta = new_meta.replace("---", "")
         new_meta = new_meta.lstrip()
+        new_ansigenome = new_ansigenome.replace("---", "")
+        new_ansigenome = new_ansigenome.lstrip()
 
         # augment missing main keys
         augments = [
-            ("ansigenome_info", "{}"),
             ("galaxy_info", "{}"),
             ("dependencies", "[]"),
         ]
+        a_augments = [
+            ("ansigenome_info", "{}"),
+        ]
 
         new_meta = self.augment_main_keys(augments, new_meta)
+        new_ansigenome = self.augment_ansigenome(a_augments, new_ansigenome)
 
         # re-attach the ---
         new_meta = "---\n\n" + new_meta
+        new_ansigenome = "---\n\n" + new_ansigenome
 
         travis_path = os.path.join(self.paths["role"], ".travis.yml")
         if os.path.exists(travis_path):
             new_meta = new_meta.replace("travis: False", "travis: True")
 
         utils.string_to_file(self.paths["meta"], new_meta)
+        utils.string_to_file(self.paths["ansigenome"], new_ansigenome)
+
+    def augment_ansigenome(self, keys, file):
+
+        ansigenome_block = """ansigenome_info:
+   galaxy_id: ''
+
+   travis: False
+
+   synopsis: |
+     Describe your role in a few paragraphs....
+
+   usage: |
+     Describe how to use in more detail...
+
+   #custom: |
+   #  Any custom output you want after the usage section..
+
+"""
+        nfile = file
+        for key in keys:
+            if key[0] not in nfile:
+                if key[0] == "ansigenome_info":
+                    # make sure ansigenome_info is always on the bottom
+                    nfile = nfile + "\n{0}".format(ansigenome_block)
+        return nfile
 
     def augment_main_keys(self, keys, file):
         """
         Add the main key if it is missing.
         """
         nfile = file
-        ansigenome_block = """
-ansigenome_info:
-  galaxy_id: ''
-
-  travis: False
-
-  synopsis: |
-    Describe your role in a few paragraphs....
-
-  usage: |
-    Describe how to use in more detail...
-
-  #custom: |
-  #  Any custom output you want after the usage section..
-"""
 
         for key in keys:
             if key[0] not in nfile:
-                if key[0] == "ansigenome_info":
-                    # make sure ansigenome_info is always on the bottom
-                    nfile = nfile + "\n{0}".format(ansigenome_block)
-                else:
-                    nfile = "\n{0}: {1}\n\n".format(key[0], key[1]) + nfile
+                nfile = "\n{0}: {1}\n\n".format(key[0], key[1]) + nfile
 
         return nfile
 
@@ -520,6 +538,7 @@ ansigenome_info:
         """
         Write out a new meta file.
         """
+
         meta_file = utils.file_to_string(self.paths["meta"])
 
         self.update_gen_report(role, "meta", meta_file)
@@ -602,6 +621,15 @@ ansigenome_info:
             "type": self.config["license_type"],
             "url": self.config["license_url"],
         }
+
+        if "license_type" in self.meta_dict.get("ansigenome_info", {}).keys():
+            license_type = self.meta_dict["ansigenome_info"]["license_type"]
+            license["type"] = license_type
+
+        if "license_url" in self.meta_dict.get("ansigenome_info", {}).keys():
+            license_url = self.meta_dict["ansigenome_info"]["license_url"]
+            license["url"] = license_url
+
 
         role_name = utils.normalize_role(role, self.config)
 
